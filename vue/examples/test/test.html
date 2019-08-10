@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <script src="./vue.js"></script>
+</head>
+<body>
+    <div id="app">
+    </div>
+
+    <script>
+        console.log(88)
+        let app = new Vue({
+            data:{
+                message:'我是vue中的model'
+            },
+            render:function(createElement){
+                return createElement('div',this.message);
+            }
+        }).$mount('#app')
+        
+        console.log(app.$options.render);
+    </script>
+</body>
+</html>
