@@ -1,3 +1,9 @@
+/*
+ * @Author: jackson
+ * @Date: 2019-07-10 10:30:54
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-08-11 21:43:07
+ */
 /* @flow */
 
 import type VueRouter from './index'
@@ -17,7 +23,12 @@ export function createMatcher (
   routes: Array<RouteConfig>,
   router: VueRouter
 ): Matcher {
-  const { pathList, pathMap, nameMap } = createRouteMap(routes)
+  // 这里的createRouteMap总共接收四个参数routes: 
+  // Array<RouteConfig>, 路由配置数组
+  // oldPathList?: Array<string>, 旧的路径数组
+  // oldPathMap?: Dictionary<RouteRecord>, 旧的路径对象
+  // oldNameMap?: Dictionary<RouteRecord> 旧的路径名称
+  const { pathList, pathMap, nameMap } = createRouteMap(routes) 
 
   function addRoutes (routes) {
     createRouteMap(routes, pathList, pathMap, nameMap)

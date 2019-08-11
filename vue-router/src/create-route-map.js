@@ -1,3 +1,9 @@
+/*
+ * @Author: jackson
+ * @Date: 2019-07-10 10:30:54
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-08-11 21:45:05
+ */
 /* @flow */
 
 import Regexp from 'path-to-regexp'
@@ -15,11 +21,11 @@ export function createRouteMap (
   nameMap: Dictionary<RouteRecord>
 } {
   // the path list is used to control path matching priority
-  const pathList: Array<string> = oldPathList || []
+  const pathList: Array<string> = oldPathList || [] // oldPathList不存在时，为空数组
   // $flow-disable-line
-  const pathMap: Dictionary<RouteRecord> = oldPathMap || Object.create(null)
+  const pathMap: Dictionary<RouteRecord> = oldPathMap || Object.create(null) // oldPathMap不存在时为空对象
   // $flow-disable-line
-  const nameMap: Dictionary<RouteRecord> = oldNameMap || Object.create(null)
+  const nameMap: Dictionary<RouteRecord> = oldNameMap || Object.create(null) // oldNameMap不存在时为空对象
 
   routes.forEach(route => {
     addRouteRecord(pathList, pathMap, nameMap, route)

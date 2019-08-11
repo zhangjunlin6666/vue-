@@ -2,8 +2,8 @@
  * @Author: jackson
  * @Date: 2019-07-10 10:30:54
  * @LastEditors: jackson
- * @LastEditTime: 2019-08-10 23:45:50
- * @Desc：vue-router配置文件
+ * @LastEditTime: 2019-08-11 01:28:06
+ * @Desc：输出vue-router源码的配置选项，为一个数组
  */
 const path = require('path')
 const buble = require('rollup-plugin-buble')
@@ -59,7 +59,7 @@ module.exports = [
 function genConfig (opts) {
   const config = {
     input: { // 入口
-      input: resolve('src/index.js'), // vue-router源码入口文件
+      input: resolve('src/index.js'), // vue-router源码入口文件，所有打包目标的入口文件都是这一个
       plugins: [ // 插件
         flow(),
         node(),
