@@ -2,7 +2,7 @@
  * @Author: jackson
  * @Date: 2019-07-10 10:30:54
  * @LastEditors: jackson
- * @LastEditTime: 2019-08-11 23:08:37
+ * @LastEditTime: 2019-10-16 16:24:24
  * @Desc：此文件重要的做了一下几件事：
     1、在vue原型上挂载只读的$router、$route
     2、注册两个vue-router的组件
@@ -22,9 +22,9 @@ export function install (Vue) {
 
   _Vue = Vue // 拿到vue当前实例
 
-  const isDef = v => v !== undefined // 检查变量是否是undefined
+  const isDef = v => v !== undefined // 检查变量是否是undefined, isDef函数返回的是一个boolean值
 
-  const registerInstance = (vm, callVal) => {
+  const registerInstance = (vm, callVal) => { // 注册实例，registerRouteInstance方法写在view.js中
     let i = vm.$options._parentVnode // 获取vm的父级虚拟dom
     if (isDef(i) && isDef(i = i.data) && isDef(i = i.registerRouteInstance)) {
       i(vm, callVal)
@@ -35,18 +35,18 @@ export function install (Vue) {
   Vue.mixin({
     // vue实例创建前的钩子
     beforeCreate () {
-      // 检查当前是否实例中是否有router选项
+      // 检查当前实例中是否有router选项
       if (isDef(this.$options.router)) {
         this._routerRoot = this // this赋值给this._routerRoot.在浏览器中打印this，可见_routerRoot变量
         this._router = this.$options.router // 将vue-router的实例赋值给this._router
         this._router.init(this) // 执行路由实例的init方法，并将vue的实例this传递进去
-        // 监控 router数据变化，这里为更新router-view
-        Vue.util.defineReactive(this, '_route', this._router.history.current) // 将this上的_route属性修改成响应式的，初始值为this._router.history.current
+        // 将this上的_route属性修改成响应式的，初始值为this._router.history.current
+        Vue.util.defineReactive(this, '_route', this._router.history.current) 
       } else {
         // 如果不存在，当前实例的_routerRoot属性要么是自身，要么是父实例的_routerRoot，为每个组件传递根组件，方便访问router信息
         this._routerRoot = (this.$parent && this.$parent._routerRoot) || this
       }
-      registerInstance(this, this)
+      registerInstance(this, this) 
     },
     destroyed () {
       registerInstance(this)

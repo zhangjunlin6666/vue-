@@ -2,7 +2,7 @@
  * @Author: jackson
  * @Date: 2019-07-10 10:30:54
  * @LastEditors: jackson
- * @LastEditTime: 2019-08-11 01:28:06
+ * @LastEditTime: 2019-10-16 15:30:30
  * @Desc：输出vue-router源码的配置选项，为一个数组
  */
 const path = require('path')
@@ -69,6 +69,7 @@ function genConfig (opts) {
         })
       ]
     },
+    sourceMap: true,
     output: { // 出口
       file: opts.file, // 文件的出口
       format: opts.format, // 目标

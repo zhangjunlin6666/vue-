@@ -1,0 +1,37 @@
+<!--
+ * @Author: jackson
+ * @Date: 2019-10-16 15:20:47
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-10-16 15:48:50
+ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <script src="./../../vue/dist/vue.js"></script>
+    <script src="./../../vue-router/dist/vue-router.js"></script>
+</head>
+<body>
+    <div id='app'>
+        <router-view>你好</router-view>
+    </div>
+    <script>
+        let router = new VueRouter({
+            routes: [
+                {
+                    path:'/'
+                }
+            ]
+        })
+        
+        let vm = new Vue({
+            el: '#app',
+            router
+        })
+        console.log(vm);
+    </script>
+</body>
+</html>

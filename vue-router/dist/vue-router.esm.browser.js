@@ -21,6 +21,10 @@ function isError (err) {
   return Object.prototype.toString.call(err).indexOf('Error') > -1
 }
 
+function isExtendedError (constructor, err) {
+  return err instanceof constructor || (err && err.name === constructor.name)
+}
+
 function extend (a, b) {
   for (const key in b) {
     a[key] = b[key];
@@ -28,15 +32,35 @@ function extend (a, b) {
   return a
 }
 
+/*
+ * @Author: jackson
+ * @Date: 2019-07-10 10:30:54
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-10-16 15:35:58
+ */
+
 var View = {
   name: 'RouterView',
   functional: true,
+  // props属性在vue2.3.0版本以上可省略，可选
   props: {
     name: {
       type: String,
       default: 'default'
     }
   },
+  /**
+   * 第一个参数为createElement
+   * 第二个参数为上下文
+   *       props：提供所有 prop 的对象
+   *       children: VNode 子节点的数组
+   *       slots: 一个函数，返回了包含所有插槽的对象
+   *       scopedSlots: (2.6.0+) 一个暴露传入的作用域插槽的对象。也以函数形式暴露普通插槽。
+   *       data：传递给组件的整个数据对象，作为 createElement 的第二个参数传入组件
+   *       parent：对父组件的引用
+   *       listeners: (2.3.0+) 一个包含了所有父组件为当前组件注册的事件监听器的对象。这是 data.on 的一个别名。
+  *        injections: (2.3.0+) 如果使用了 inject 选项，则该对象包含了应当被注入的属性。
+   */
   render (_, { props, children, parent, data }) {
     // used by devtools to display a router-view badge
     data.routerView = true;
@@ -376,195 +400,6 @@ function queryIncludes (current, target) {
 
 /*  */
 
-// work around weird flow bug
-const toTypes = [String, Object];
-const eventTypes = [String, Array];
-
-var Link = {
-  name: 'RouterLink',
-  props: {
-    to: {
-      type: toTypes,
-      required: true
-    },
-    tag: {
-      type: String,
-      default: 'a'
-    },
-    exact: Boolean,
-    append: Boolean,
-    replace: Boolean,
-    activeClass: String,
-    exactActiveClass: String,
-    event: {
-      type: eventTypes,
-      default: 'click'
-    }
-  },
-  render (h) {
-    const router = this.$router;
-    const current = this.$route;
-    const { location, route, href } = router.resolve(this.to, current, this.append);
-
-    const classes = {};
-    const globalActiveClass = router.options.linkActiveClass;
-    const globalExactActiveClass = router.options.linkExactActiveClass;
-    // Support global empty active class
-    const activeClassFallback = globalActiveClass == null
-      ? 'router-link-active'
-      : globalActiveClass;
-    const exactActiveClassFallback = globalExactActiveClass == null
-      ? 'router-link-exact-active'
-      : globalExactActiveClass;
-    const activeClass = this.activeClass == null
-      ? activeClassFallback
-      : this.activeClass;
-    const exactActiveClass = this.exactActiveClass == null
-      ? exactActiveClassFallback
-      : this.exactActiveClass;
-    const compareTarget = location.path
-      ? createRoute(null, location, null, router)
-      : route;
-
-    classes[exactActiveClass] = isSameRoute(current, compareTarget);
-    classes[activeClass] = this.exact
-      ? classes[exactActiveClass]
-      : isIncludedRoute(current, compareTarget);
-
-    const handler = e => {
-      if (guardEvent(e)) {
-        if (this.replace) {
-          router.replace(location);
-        } else {
-          router.push(location);
-        }
-      }
-    };
-
-    const on = { click: guardEvent };
-    if (Array.isArray(this.event)) {
-      this.event.forEach(e => { on[e] = handler; });
-    } else {
-      on[this.event] = handler;
-    }
-
-    const data = {
-      class: classes
-    };
-
-    if (this.tag === 'a') {
-      data.on = on;
-      data.attrs = { href };
-    } else {
-      // find the first <a> child and apply listener and href
-      const a = findAnchor(this.$slots.default);
-      if (a) {
-        // in case the <a> is a static node
-        a.isStatic = false;
-        const aData = a.data = extend({}, a.data);
-        aData.on = on;
-        const aAttrs = a.data.attrs = extend({}, a.data.attrs);
-        aAttrs.href = href;
-      } else {
-        // doesn't have <a> child, apply listener to self
-        data.on = on;
-      }
-    }
-
-    return h(this.tag, data, this.$slots.default)
-  }
-}
-
-function guardEvent (e) {
-  // don't redirect with control keys
-  if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey) return
-  // don't redirect when preventDefault called
-  if (e.defaultPrevented) return
-  // don't redirect on right click
-  if (e.button !== undefined && e.button !== 0) return
-  // don't redirect if `target="_blank"`
-  if (e.currentTarget && e.currentTarget.getAttribute) {
-    const target = e.currentTarget.getAttribute('target');
-    if (/\b_blank\b/i.test(target)) return
-  }
-  // this may be a Weex event which doesn't have this method
-  if (e.preventDefault) {
-    e.preventDefault();
-  }
-  return true
-}
-
-function findAnchor (children) {
-  if (children) {
-    let child;
-    for (let i = 0; i < children.length; i++) {
-      child = children[i];
-      if (child.tag === 'a') {
-        return child
-      }
-      if (child.children && (child = findAnchor(child.children))) {
-        return child
-      }
-    }
-  }
-}
-
-let _Vue;
-
-function install (Vue) {
-  if (install.installed && _Vue === Vue) return
-  install.installed = true;
-
-  _Vue = Vue;
-
-  const isDef = v => v !== undefined;
-
-  const registerInstance = (vm, callVal) => {
-    let i = vm.$options._parentVnode;
-    if (isDef(i) && isDef(i = i.data) && isDef(i = i.registerRouteInstance)) {
-      i(vm, callVal);
-    }
-  };
-
-  Vue.mixin({
-    beforeCreate () {
-      if (isDef(this.$options.router)) {
-        this._routerRoot = this;
-        this._router = this.$options.router;
-        this._router.init(this);
-        Vue.util.defineReactive(this, '_route', this._router.history.current);
-      } else {
-        this._routerRoot = (this.$parent && this.$parent._routerRoot) || this;
-      }
-      registerInstance(this, this);
-    },
-    destroyed () {
-      registerInstance(this);
-    }
-  });
-
-  Object.defineProperty(Vue.prototype, '$router', {
-    get () { return this._routerRoot._router }
-  });
-
-  Object.defineProperty(Vue.prototype, '$route', {
-    get () { return this._routerRoot._route }
-  });
-
-  Vue.component('RouterView', View);
-  Vue.component('RouterLink', Link);
-
-  const strats = Vue.config.optionMergeStrategies;
-  // use the same hook merging strategy for route hooks
-  strats.beforeRouteEnter = strats.beforeRouteLeave = strats.beforeRouteUpdate = strats.created;
-}
-
-/*  */
-
-const inBrowser = typeof window !== 'undefined';
-
-/*  */
-
 function resolvePath (
   relative,
   base,
@@ -634,14 +469,14 @@ function cleanPath (path) {
   return path.replace(/\/\//g, '/')
 }
 
-var isarray = Array.isArray || function (arr) {
+var _isarray_0_0_1_isarray = Array.isArray || function (arr) {
   return Object.prototype.toString.call(arr) == '[object Array]';
 };
 
 /**
  * Expose `pathToRegexp`.
  */
-var pathToRegexp_1 = pathToRegexp;
+var _pathToRegexp_1_7_0_pathToRegexp = pathToRegexp;
 var parse_1 = parse;
 var compile_1 = compile;
 var tokensToFunction_1 = tokensToFunction;
@@ -818,7 +653,7 @@ function tokensToFunction (tokens) {
         }
       }
 
-      if (isarray(value)) {
+      if (_isarray_0_0_1_isarray(value)) {
         if (!token.repeat) {
           throw new TypeError('Expected "' + token.name + '" to not repeat, but received `' + JSON.stringify(value) + '`')
         }
@@ -969,7 +804,7 @@ function stringToRegexp (path, keys, options) {
  * @return {!RegExp}
  */
 function tokensToRegExp (tokens, keys, options) {
-  if (!isarray(keys)) {
+  if (!_isarray_0_0_1_isarray(keys)) {
     options = /** @type {!Object} */ (keys || options);
     keys = [];
   }
@@ -1045,7 +880,7 @@ function tokensToRegExp (tokens, keys, options) {
  * @return {!RegExp}
  */
 function pathToRegexp (path, keys, options) {
-  if (!isarray(keys)) {
+  if (!_isarray_0_0_1_isarray(keys)) {
     options = /** @type {!Object} */ (keys || options);
     keys = [];
   }
@@ -1056,16 +891,16 @@ function pathToRegexp (path, keys, options) {
     return regexpToRegexp(path, /** @type {!Array} */ (keys))
   }
 
-  if (isarray(path)) {
+  if (_isarray_0_0_1_isarray(path)) {
     return arrayToRegexp(/** @type {!Array} */ (path), /** @type {!Array} */ (keys), options)
   }
 
   return stringToRegexp(/** @type {string} */ (path), /** @type {!Array} */ (keys), options)
 }
-pathToRegexp_1.parse = parse_1;
-pathToRegexp_1.compile = compile_1;
-pathToRegexp_1.tokensToFunction = tokensToFunction_1;
-pathToRegexp_1.tokensToRegExp = tokensToRegExp_1;
+_pathToRegexp_1_7_0_pathToRegexp.parse = parse_1;
+_pathToRegexp_1_7_0_pathToRegexp.compile = compile_1;
+_pathToRegexp_1_7_0_pathToRegexp.tokensToFunction = tokensToFunction_1;
+_pathToRegexp_1_7_0_pathToRegexp.tokensToRegExp = tokensToRegExp_1;
 
 /*  */
 
@@ -1081,7 +916,7 @@ function fillParams (
   try {
     const filler =
       regexpCompileCache[path] ||
-      (regexpCompileCache[path] = pathToRegexp_1.compile(path));
+      (regexpCompileCache[path] = _pathToRegexp_1_7_0_pathToRegexp.compile(path));
 
     // Fix #2505 resolving asterisk routes { name: 'not-found', params: { pathMatch: '/not-found' }}
     if (params.pathMatch) params[0] = params.pathMatch;
@@ -1096,170 +931,6 @@ function fillParams (
     // delete the 0 if it was added
     delete params[0];
   }
-}
-
-/*  */
-
-function createRouteMap (
-  routes,
-  oldPathList,
-  oldPathMap,
-  oldNameMap
-) {
-  // the path list is used to control path matching priority
-  const pathList = oldPathList || [];
-  // $flow-disable-line
-  const pathMap = oldPathMap || Object.create(null);
-  // $flow-disable-line
-  const nameMap = oldNameMap || Object.create(null);
-
-  routes.forEach(route => {
-    addRouteRecord(pathList, pathMap, nameMap, route);
-  });
-
-  // ensure wildcard routes are always at the end
-  for (let i = 0, l = pathList.length; i < l; i++) {
-    if (pathList[i] === '*') {
-      pathList.push(pathList.splice(i, 1)[0]);
-      l--;
-      i--;
-    }
-  }
-
-  return {
-    pathList,
-    pathMap,
-    nameMap
-  }
-}
-
-function addRouteRecord (
-  pathList,
-  pathMap,
-  nameMap,
-  route,
-  parent,
-  matchAs
-) {
-  const { path, name } = route;
-  {
-    assert(path != null, `"path" is required in a route configuration.`);
-    assert(
-      typeof route.component !== 'string',
-      `route config "component" for path: ${String(path || name)} cannot be a ` +
-      `string id. Use an actual component instead.`
-    );
-  }
-
-  const pathToRegexpOptions = route.pathToRegexpOptions || {};
-  const normalizedPath = normalizePath(
-    path,
-    parent,
-    pathToRegexpOptions.strict
-  );
-
-  if (typeof route.caseSensitive === 'boolean') {
-    pathToRegexpOptions.sensitive = route.caseSensitive;
-  }
-
-  const record = {
-    path: normalizedPath,
-    regex: compileRouteRegex(normalizedPath, pathToRegexpOptions),
-    components: route.components || { default: route.component },
-    instances: {},
-    name,
-    parent,
-    matchAs,
-    redirect: route.redirect,
-    beforeEnter: route.beforeEnter,
-    meta: route.meta || {},
-    props: route.props == null
-      ? {}
-      : route.components
-        ? route.props
-        : { default: route.props }
-  };
-
-  if (route.children) {
-    // Warn if route is named, does not redirect and has a default child route.
-    // If users navigate to this route by name, the default child will
-    // not be rendered (GH Issue #629)
-    {
-      if (route.name && !route.redirect && route.children.some(child => /^\/?$/.test(child.path))) {
-        warn(
-          false,
-          `Named Route '${route.name}' has a default child route. ` +
-          `When navigating to this named route (:to="{name: '${route.name}'"), ` +
-          `the default child route will not be rendered. Remove the name from ` +
-          `this route and use the name of the default child route for named ` +
-          `links instead.`
-        );
-      }
-    }
-    route.children.forEach(child => {
-      const childMatchAs = matchAs
-        ? cleanPath(`${matchAs}/${child.path}`)
-        : undefined;
-      addRouteRecord(pathList, pathMap, nameMap, child, record, childMatchAs);
-    });
-  }
-
-  if (route.alias !== undefined) {
-    const aliases = Array.isArray(route.alias)
-      ? route.alias
-      : [route.alias];
-
-    aliases.forEach(alias => {
-      const aliasRoute = {
-        path: alias,
-        children: route.children
-      };
-      addRouteRecord(
-        pathList,
-        pathMap,
-        nameMap,
-        aliasRoute,
-        parent,
-        record.path || '/' // matchAs
-      );
-    });
-  }
-
-  if (!pathMap[record.path]) {
-    pathList.push(record.path);
-    pathMap[record.path] = record;
-  }
-
-  if (name) {
-    if (!nameMap[name]) {
-      nameMap[name] = record;
-    } else if ("development" !== 'production' && !matchAs) {
-      warn(
-        false,
-        `Duplicate named routes definition: ` +
-        `{ name: "${name}", path: "${record.path}" }`
-      );
-    }
-  }
-}
-
-function compileRouteRegex (path, pathToRegexpOptions) {
-  const regex = pathToRegexp_1(path, [], pathToRegexpOptions);
-  {
-    const keys = Object.create(null);
-    regex.keys.forEach(key => {
-      warn(!keys[key.name], `Duplicate param keys in route with path: "${path}"`);
-      keys[key.name] = true;
-    });
-  }
-  return regex
-}
-
-function normalizePath (path, parent, strict) {
-  if (!strict) path = path.replace(/\/$/, '');
-  if (path[0] === '/') return path
-  if (parent == null) return path
-  return cleanPath(`${parent.path}/${path}`)
 }
 
 /*  */
@@ -1322,13 +993,438 @@ function normalizeLocation (
 
 /*  */
 
+// work around weird flow bug
+const toTypes = [String, Object];
+const eventTypes = [String, Array];
+
+var Link = {
+  name: 'RouterLink',
+  props: {
+    to: {
+      type: toTypes,
+      required: true
+    },
+    tag: {
+      type: String,
+      default: 'a'
+    },
+    exact: Boolean,
+    append: Boolean,
+    replace: Boolean,
+    activeClass: String,
+    exactActiveClass: String,
+    event: {
+      type: eventTypes,
+      default: 'click'
+    }
+  },
+  render (h) {
+    const router = this.$router;
+    const current = this.$route;
+    const { location, route, href } = router.resolve(
+      this.to,
+      current,
+      this.append
+    );
+
+    const classes = {};
+    const globalActiveClass = router.options.linkActiveClass;
+    const globalExactActiveClass = router.options.linkExactActiveClass;
+    // Support global empty active class
+    const activeClassFallback =
+      globalActiveClass == null ? 'router-link-active' : globalActiveClass;
+    const exactActiveClassFallback =
+      globalExactActiveClass == null
+        ? 'router-link-exact-active'
+        : globalExactActiveClass;
+    const activeClass =
+      this.activeClass == null ? activeClassFallback : this.activeClass;
+    const exactActiveClass =
+      this.exactActiveClass == null
+        ? exactActiveClassFallback
+        : this.exactActiveClass;
+
+    const compareTarget = route.redirectedFrom
+      ? createRoute(null, normalizeLocation(route.redirectedFrom), null, router)
+      : route;
+
+    classes[exactActiveClass] = isSameRoute(current, compareTarget);
+    classes[activeClass] = this.exact
+      ? classes[exactActiveClass]
+      : isIncludedRoute(current, compareTarget);
+
+    const handler = e => {
+      if (guardEvent(e)) {
+        if (this.replace) {
+          router.replace(location);
+        } else {
+          router.push(location);
+        }
+      }
+    };
+
+    const on = { click: guardEvent };
+    if (Array.isArray(this.event)) {
+      this.event.forEach(e => {
+        on[e] = handler;
+      });
+    } else {
+      on[this.event] = handler;
+    }
+
+    const data = {
+      class: classes
+    };
+
+    if (this.tag === 'a') {
+      data.on = on;
+      data.attrs = { href };
+    } else {
+      // find the first <a> child and apply listener and href
+      const a = findAnchor(this.$slots.default);
+      if (a) {
+        // in case the <a> is a static node
+        a.isStatic = false;
+        const aData = (a.data = extend({}, a.data));
+        aData.on = on;
+        const aAttrs = (a.data.attrs = extend({}, a.data.attrs));
+        aAttrs.href = href;
+      } else {
+        // doesn't have <a> child, apply listener to self
+        data.on = on;
+      }
+    }
+
+    return h(this.tag, data, this.$slots.default)
+  }
+}
+
+function guardEvent (e) {
+  // don't redirect with control keys
+  if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey) return
+  // don't redirect when preventDefault called
+  if (e.defaultPrevented) return
+  // don't redirect on right click
+  if (e.button !== undefined && e.button !== 0) return
+  // don't redirect if `target="_blank"`
+  if (e.currentTarget && e.currentTarget.getAttribute) {
+    const target = e.currentTarget.getAttribute('target');
+    if (/\b_blank\b/i.test(target)) return
+  }
+  // this may be a Weex event which doesn't have this method
+  if (e.preventDefault) {
+    e.preventDefault();
+  }
+  return true
+}
+
+function findAnchor (children) {
+  if (children) {
+    let child;
+    for (let i = 0; i < children.length; i++) {
+      child = children[i];
+      if (child.tag === 'a') {
+        return child
+      }
+      if (child.children && (child = findAnchor(child.children))) {
+        return child
+      }
+    }
+  }
+}
+
+/*
+ * @Author: jackson
+ * @Date: 2019-07-10 10:30:54
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-10-16 14:12:44
+ * @Desc：此文件重要的做了一下几件事：
+    1、在vue原型上挂载只读的$router、$route
+    2、注册两个vue-router的组件
+    3、利用vue.mixin()进行一些变量的初始化，例如_routerRoot、_router、_route
+ */
+
+let _Vue;
+
+// 导出install方法，该方法是给vue.use()传递参数对象中的install函数属性，vue.use()内部会调用install方法
+// 并将vue当前实例传递给install
+function install (Vue) {
+  // 检查插件有无注册，如果已经注册，则返回，只会调用一次
+  if (install.installed && _Vue === Vue) return
+  install.installed = true; // 已经注册的标识符
+
+  _Vue = Vue; // 拿到vue当前实例
+
+  const isDef = v => v !== undefined; // 检查变量是否是undefined, isDef函数返回的是一个boolean值
+
+  const registerInstance = (vm, callVal) => {
+    let i = vm.$options._parentVnode; // 获取vm的父级虚拟dom
+    if (isDef(i) && isDef(i = i.data) && isDef(i = i.registerRouteInstance)) {
+      i(vm, callVal);
+    }
+  };
+
+  // 利用vue的minix混合功能
+  Vue.mixin({
+    // vue实例创建前的钩子
+    beforeCreate () {
+      // 检查当前实例中是否有router选项
+      if (isDef(this.$options.router)) {
+        this._routerRoot = this; // this赋值给this._routerRoot.在浏览器中打印this，可见_routerRoot变量
+        this._router = this.$options.router; // 将vue-router的实例赋值给this._router
+        this._router.init(this); // 执行路由实例的init方法，并将vue的实例this传递进去
+        // 监控 router数据变化，这里为更新router-view
+        Vue.util.defineReactive(this, '_route', this._router.history.current); // 将this上的_route属性修改成响应式的，初始值为this._router.history.current
+      } else {
+        // 如果不存在，当前实例的_routerRoot属性要么是自身，要么是父实例的_routerRoot，为每个组件传递根组件，方便访问router信息
+        this._routerRoot = (this.$parent && this.$parent._routerRoot) || this;
+      }
+      registerInstance(this, this);
+    },
+    destroyed () {
+      registerInstance(this);
+    }
+  });
+
+  // 在vue的原型上定义$router属性，并且是只读的，值是vue-router实例，即new Router();
+  Object.defineProperty(Vue.prototype, '$router', {
+    get () { return this._routerRoot._router }
+  });
+
+  // 在vue的原型上定义$route属性，并且是只读的，值是this._router.history.current
+  Object.defineProperty(Vue.prototype, '$route', {
+    get () { return this._routerRoot._route }
+  });
+
+  // 注册router-view、router-link两个组件
+  Vue.component('RouterView', View);
+  Vue.component('RouterLink', Link);
+
+  const strats = Vue.config.optionMergeStrategies;
+  // use the same hook merging strategy for route hooks
+  strats.beforeRouteEnter = strats.beforeRouteLeave = strats.beforeRouteUpdate = strats.created;
+}
+
+/*
+ * @Author: jackson
+ * @Date: 2019-07-10 10:30:54
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-08-11 21:05:41
+ */
+/*  */
+// 判断是否是在浏览器环境中，即window对象是否存在，存在就是在浏览器中
+const inBrowser = typeof window !== 'undefined';
+
+/*
+ * @Author: jackson
+ * @Date: 2019-07-10 10:30:54
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-08-11 21:45:05
+ */
+
+function createRouteMap (
+  routes,
+  oldPathList,
+  oldPathMap,
+  oldNameMap
+) {
+  // the path list is used to control path matching priority
+  const pathList = oldPathList || []; // oldPathList不存在时，为空数组
+  // $flow-disable-line
+  const pathMap = oldPathMap || Object.create(null); // oldPathMap不存在时为空对象
+  // $flow-disable-line
+  const nameMap = oldNameMap || Object.create(null); // oldNameMap不存在时为空对象
+
+  routes.forEach(route => {
+    addRouteRecord(pathList, pathMap, nameMap, route);
+  });
+
+  // ensure wildcard routes are always at the end
+  for (let i = 0, l = pathList.length; i < l; i++) {
+    if (pathList[i] === '*') {
+      pathList.push(pathList.splice(i, 1)[0]);
+      l--;
+      i--;
+    }
+  }
+
+  return {
+    pathList,
+    pathMap,
+    nameMap
+  }
+}
+
+function addRouteRecord (
+  pathList,
+  pathMap,
+  nameMap,
+  route,
+  parent,
+  matchAs
+) {
+  const { path, name } = route;
+  {
+    assert(path != null, `"path" is required in a route configuration.`);
+    assert(
+      typeof route.component !== 'string',
+      `route config "component" for path: ${String(
+        path || name
+      )} cannot be a ` + `string id. Use an actual component instead.`
+    );
+  }
+
+  const pathToRegexpOptions =
+    route.pathToRegexpOptions || {};
+  const normalizedPath = normalizePath(path, parent, pathToRegexpOptions.strict);
+
+  if (typeof route.caseSensitive === 'boolean') {
+    pathToRegexpOptions.sensitive = route.caseSensitive;
+  }
+
+  const record = {
+    path: normalizedPath,
+    regex: compileRouteRegex(normalizedPath, pathToRegexpOptions),
+    components: route.components || { default: route.component },
+    instances: {},
+    name,
+    parent,
+    matchAs,
+    redirect: route.redirect,
+    beforeEnter: route.beforeEnter,
+    meta: route.meta || {},
+    props:
+      route.props == null
+        ? {}
+        : route.components
+          ? route.props
+          : { default: route.props }
+  };
+
+  if (route.children) {
+    // Warn if route is named, does not redirect and has a default child route.
+    // If users navigate to this route by name, the default child will
+    // not be rendered (GH Issue #629)
+    {
+      if (
+        route.name &&
+        !route.redirect &&
+        route.children.some(child => /^\/?$/.test(child.path))
+      ) {
+        warn(
+          false,
+          `Named Route '${route.name}' has a default child route. ` +
+            `When navigating to this named route (:to="{name: '${
+              route.name
+            }'"), ` +
+            `the default child route will not be rendered. Remove the name from ` +
+            `this route and use the name of the default child route for named ` +
+            `links instead.`
+        );
+      }
+    }
+    route.children.forEach(child => {
+      const childMatchAs = matchAs
+        ? cleanPath(`${matchAs}/${child.path}`)
+        : undefined;
+      addRouteRecord(pathList, pathMap, nameMap, child, record, childMatchAs);
+    });
+  }
+
+  if (!pathMap[record.path]) {
+    pathList.push(record.path);
+    pathMap[record.path] = record;
+  }
+
+  if (route.alias !== undefined) {
+    const aliases = Array.isArray(route.alias) ? route.alias : [route.alias];
+    for (let i = 0; i < aliases.length; ++i) {
+      const alias = aliases[i];
+      if ("development" !== 'production' && alias === path) {
+        warn(
+          false,
+          `Found an alias with the same value as the path: "${path}". You have to remove that alias. It will be ignored in development.`
+        );
+        // skip in dev to make it work
+        continue
+      }
+
+      const aliasRoute = {
+        path: alias,
+        children: route.children
+      };
+      addRouteRecord(
+        pathList,
+        pathMap,
+        nameMap,
+        aliasRoute,
+        parent,
+        record.path || '/' // matchAs
+      );
+    }
+  }
+
+  if (name) {
+    if (!nameMap[name]) {
+      nameMap[name] = record;
+    } else if ("development" !== 'production' && !matchAs) {
+      warn(
+        false,
+        `Duplicate named routes definition: ` +
+          `{ name: "${name}", path: "${record.path}" }`
+      );
+    }
+  }
+}
+
+function compileRouteRegex (
+  path,
+  pathToRegexpOptions
+) {
+  const regex = _pathToRegexp_1_7_0_pathToRegexp(path, [], pathToRegexpOptions);
+  {
+    const keys = Object.create(null);
+    regex.keys.forEach(key => {
+      warn(
+        !keys[key.name],
+        `Duplicate param keys in route with path: "${path}"`
+      );
+      keys[key.name] = true;
+    });
+  }
+  return regex
+}
+
+function normalizePath (
+  path,
+  parent,
+  strict
+) {
+  if (!strict) path = path.replace(/\/$/, '');
+  if (path[0] === '/') return path
+  if (parent == null) return path
+  return cleanPath(`${parent.path}/${path}`)
+}
+
+/*
+ * @Author: jackson
+ * @Date: 2019-07-10 10:30:54
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-08-11 21:43:07
+ */
+
 
 
 function createMatcher (
   routes,
   router
 ) {
-  const { pathList, pathMap, nameMap } = createRouteMap(routes);
+  // 这里的createRouteMap总共接收四个参数routes: 
+  // Array<RouteConfig>, 路由配置数组
+  // oldPathList?: Array<string>, 旧的路径数组
+  // oldPathMap?: Dictionary<RouteRecord>, 旧的路径对象
+  // oldNameMap?: Dictionary<RouteRecord> 旧的路径名称
+  const { pathList, pathMap, nameMap } = createRouteMap(routes); 
 
   function addRoutes (routes) {
     createRouteMap(routes, pathList, pathMap, nameMap);
@@ -1553,20 +1649,27 @@ function handleScroll (
   // wait until re-render finishes before scrolling
   router.app.$nextTick(() => {
     const position = getScrollPosition();
-    const shouldScroll = behavior.call(router, to, from, isPop ? position : null);
+    const shouldScroll = behavior.call(
+      router,
+      to,
+      from,
+      isPop ? position : null
+    );
 
     if (!shouldScroll) {
       return
     }
 
     if (typeof shouldScroll.then === 'function') {
-      shouldScroll.then(shouldScroll => {
-        scrollToPosition((shouldScroll), position);
-      }).catch(err => {
-        {
-          assert(false, err.toString());
-        }
-      });
+      shouldScroll
+        .then(shouldScroll => {
+          scrollToPosition((shouldScroll), position);
+        })
+        .catch(err => {
+          {
+            assert(false, err.toString());
+          }
+        });
     } else {
       scrollToPosition(shouldScroll, position);
     }
@@ -1622,12 +1725,22 @@ function isNumber (v) {
   return typeof v === 'number'
 }
 
+const hashStartsWithNumberRE = /^#\d/;
+
 function scrollToPosition (shouldScroll, position) {
   const isObject = typeof shouldScroll === 'object';
   if (isObject && typeof shouldScroll.selector === 'string') {
-    const el = document.querySelector(shouldScroll.selector);
+    // getElementById would still fail if the selector contains a more complicated query like #main[data-attr]
+    // but at the same time, it doesn't make much sense to select an element with an id and an extra selector
+    const el = hashStartsWithNumberRE.test(shouldScroll.selector) // $flow-disable-line
+      ? document.getElementById(shouldScroll.selector.slice(1)) // $flow-disable-line
+      : document.querySelector(shouldScroll.selector);
+
     if (el) {
-      let offset = shouldScroll.offset && typeof shouldScroll.offset === 'object' ? shouldScroll.offset : {};
+      let offset =
+        shouldScroll.offset && typeof shouldScroll.offset === 'object'
+          ? shouldScroll.offset
+          : {};
       offset = normalizeOffset(offset);
       position = getElementPosition(el, offset);
     } else if (isValidPosition(shouldScroll)) {
@@ -1642,21 +1755,26 @@ function scrollToPosition (shouldScroll, position) {
   }
 }
 
-/*  */
+/*
+ * @Author: jackson
+ * @Date: 2019-07-10 10:30:54
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-08-11 22:14:31
+ */
 
 const supportsPushState = inBrowser && (function () {
-  const ua = window.navigator.userAgent;
+  const ua = window.navigator.userAgent; // 获取客户端的代理对象
 
   if (
-    (ua.indexOf('Android 2.') !== -1 || ua.indexOf('Android 4.0') !== -1) &&
-    ua.indexOf('Mobile Safari') !== -1 &&
-    ua.indexOf('Chrome') === -1 &&
-    ua.indexOf('Windows Phone') === -1
+    (ua.indexOf('Android 2.') !== -1 || ua.indexOf('Android 4.0') !== -1) && // 是安卓2. 或者4.0
+    ua.indexOf('Mobile Safari') !== -1 && // 是手机Safari浏览器
+    ua.indexOf('Chrome') === -1 && // 非Chrome浏览器
+    ua.indexOf('Windows Phone') === -1 // 非Windows Phone手机
   ) {
     return false
   }
 
-  return window.history && 'pushState' in window.history
+  return window.history && 'pushState' in window.history // 支持h5 history api
 })();
 
 // use User Timing api (if present) for more accurate key precision
@@ -1824,6 +1942,13 @@ function once (fn) {
   }
 }
 
+class NavigationDuplicated extends Error {
+  constructor () {
+    super('Navigating to current location is not allowed');
+    this.name = 'NavigationDuplicated';
+  }
+}
+
 /*  */
 
 class History {
@@ -1875,35 +2000,53 @@ class History {
     this.errorCbs.push(errorCb);
   }
 
-  transitionTo (location, onComplete, onAbort) {
+  transitionTo (
+    location,
+    onComplete,
+    onAbort
+  ) {
     const route = this.router.match(location, this.current);
-    this.confirmTransition(route, () => {
-      this.updateRoute(route);
-      onComplete && onComplete(route);
-      this.ensureURL();
+    this.confirmTransition(
+      route,
+      () => {
+        this.updateRoute(route);
+        onComplete && onComplete(route);
+        this.ensureURL();
 
-      // fire ready cbs once
-      if (!this.ready) {
-        this.ready = true;
-        this.readyCbs.forEach(cb => { cb(route); });
+        // fire ready cbs once
+        if (!this.ready) {
+          this.ready = true;
+          this.readyCbs.forEach(cb => {
+            cb(route);
+          });
+        }
+      },
+      err => {
+        if (onAbort) {
+          onAbort(err);
+        }
+        if (err && !this.ready) {
+          this.ready = true;
+          this.readyErrorCbs.forEach(cb => {
+            cb(err);
+          });
+        }
       }
-    }, err => {
-      if (onAbort) {
-        onAbort(err);
-      }
-      if (err && !this.ready) {
-        this.ready = true;
-        this.readyErrorCbs.forEach(cb => { cb(err); });
-      }
-    });
+    );
   }
 
   confirmTransition (route, onComplete, onAbort) {
     const current = this.current;
     const abort = err => {
-      if (isError(err)) {
+      // after merging https://github.com/vuejs/vue-router/pull/2771 we
+      // When the user navigates through history through back/forward buttons
+      // we do not want to throw the error. We only throw it if directly calling
+      // push/replace. That's why it's not included in isError
+      if (!isExtendedError(NavigationDuplicated, err) && isError(err)) {
         if (this.errorCbs.length) {
-          this.errorCbs.forEach(cb => { cb(err); });
+          this.errorCbs.forEach(cb => {
+            cb(err);
+          });
         } else {
           warn(false, 'uncaught error during route navigation:');
           console.error(err);
@@ -1917,14 +2060,13 @@ class History {
       route.matched.length === current.matched.length
     ) {
       this.ensureURL();
-      return abort()
+      return abort(new NavigationDuplicated(route))
     }
 
-    const {
-      updated,
-      deactivated,
-      activated
-    } = resolveQueue(this.current.matched, route.matched);
+    const { updated, deactivated, activated } = resolveQueue(
+      this.current.matched,
+      route.matched
+    );
 
     const queue = [].concat(
       // in-component leave guards
@@ -1952,10 +2094,8 @@ class History {
             abort(to);
           } else if (
             typeof to === 'string' ||
-            (typeof to === 'object' && (
-              typeof to.path === 'string' ||
-              typeof to.name === 'string'
-            ))
+            (typeof to === 'object' &&
+              (typeof to.path === 'string' || typeof to.name === 'string'))
           ) {
             // next('/') or next({ path: '/' }) -> redirect
             abort();
@@ -1989,7 +2129,9 @@ class History {
         onComplete(route);
         if (this.router.app) {
           this.router.app.$nextTick(() => {
-            postEnterCbs.forEach(cb => { cb(); });
+            postEnterCbs.forEach(cb => {
+              cb();
+            });
           });
         }
       });
@@ -2093,9 +2235,13 @@ function extractEnterGuards (
   cbs,
   isValid
 ) {
-  return extractGuards(activated, 'beforeRouteEnter', (guard, _, match, key) => {
-    return bindEnterGuard(guard, match, key, cbs, isValid)
-  })
+  return extractGuards(
+    activated,
+    'beforeRouteEnter',
+    (guard, _, match, key) => {
+      return bindEnterGuard(guard, match, key, cbs, isValid)
+    }
+  )
 }
 
 function bindEnterGuard (
@@ -2140,7 +2286,12 @@ function poll (
   }
 }
 
-/*  */
+/*
+ * @Author: jackson
+ * @Date: 2019-07-10 10:30:54
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-08-11 23:35:17
+ */
 
 class HTML5History extends History {
   constructor (router, base) {
@@ -2201,16 +2352,19 @@ class HTML5History extends History {
     }
   }
 
+  // 根据base选项获取当前路径
   getCurrentLocation () {
     return getLocation(this.base)
   }
 }
 
+// 获取路径
 function getLocation (base) {
-  let path = decodeURI(window.location.pathname);
-  if (base && path.indexOf(base) === 0) {
-    path = path.slice(base.length);
+  let path = decodeURI(window.location.pathname); // 获取路径并解码
+  if (base && path.indexOf(base) === 0) { // 如果路由选项中配置了base属性，并且在path中也写了base时
+    path = path.slice(base.length); // 此时需要将path中的base部分截取掉
   }
+  // 拼接路径，返回值如：/a/b?a=2#a，最终的path中是不包含base部分的
   return (path || '/') + window.location.search + window.location.hash
 }
 
@@ -2366,18 +2520,26 @@ class AbstractHistory extends History {
   }
 
   push (location, onComplete, onAbort) {
-    this.transitionTo(location, route => {
-      this.stack = this.stack.slice(0, this.index + 1).concat(route);
-      this.index++;
-      onComplete && onComplete(route);
-    }, onAbort);
+    this.transitionTo(
+      location,
+      route => {
+        this.stack = this.stack.slice(0, this.index + 1).concat(route);
+        this.index++;
+        onComplete && onComplete(route);
+      },
+      onAbort
+    );
   }
 
   replace (location, onComplete, onAbort) {
-    this.transitionTo(location, route => {
-      this.stack = this.stack.slice(0, this.index).concat(route);
-      onComplete && onComplete(route);
-    }, onAbort);
+    this.transitionTo(
+      location,
+      route => {
+        this.stack = this.stack.slice(0, this.index).concat(route);
+        onComplete && onComplete(route);
+      },
+      onAbort
+    );
   }
 
   go (n) {
@@ -2386,10 +2548,18 @@ class AbstractHistory extends History {
       return
     }
     const route = this.stack[targetIndex];
-    this.confirmTransition(route, () => {
-      this.index = targetIndex;
-      this.updateRoute(route);
-    });
+    this.confirmTransition(
+      route,
+      () => {
+        this.index = targetIndex;
+        this.updateRoute(route);
+      },
+      err => {
+        if (isExtendedError(NavigationDuplicated, err)) {
+          this.index = targetIndex;
+        }
+      }
+    );
   }
 
   getCurrentLocation () {
@@ -2402,14 +2572,20 @@ class AbstractHistory extends History {
   }
 }
 
-/*  */
+/*
+ * @Author: jackson
+ * @Date: 2019-07-10 10:30:54
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-08-11 23:40:30
+ */
 
 
 
 class VueRouter {
-  
-  
+   // 静态方法，没有返回值
+   // 静态属性 版本号，字符串
 
+  // 定义属性类型
   
   
   
@@ -2426,22 +2602,24 @@ class VueRouter {
   constructor (options = {}) {
     this.app = null;
     this.apps = [];
-    this.options = options;
+    this.options = options; // 接收vue路由选项对象
     this.beforeHooks = [];
     this.resolveHooks = [];
     this.afterHooks = [];
-    this.matcher = createMatcher(options.routes || [], this);
+    this.matcher = createMatcher(options.routes || [], this); // 返回一个有match, addRoutes属性的对象，生成匹配表
 
-    let mode = options.mode || 'hash';
-    this.fallback = mode === 'history' && !supportsPushState && options.fallback !== false;
+    let mode = options.mode || 'hash'; // 路由模式，hash、history、abstract，默认为hash模式
+    
+    this.fallback = mode === 'history' && !supportsPushState && options.fallback !== false; // 是否支持h5 history API 不支持就将模式降级为hash模式
     if (this.fallback) {
       mode = 'hash';
     }
-    if (!inBrowser) {
-      mode = 'abstract';
+    if (!inBrowser) { // 不在浏览器中
+      mode = 'abstract'; // abstract模式支持所有 JavaScript 运行环境，如 Node.js 服务器端。如果发现没有浏览器的 API，路由会自动强制进入这个模式。
     }
-    this.mode = mode;
+    this.mode = mode; // 模式赋值
 
+    // 路由模式初始化赋值
     switch (mode) {
       case 'history':
         this.history = new HTML5History(this, options.base);
@@ -2459,6 +2637,7 @@ class VueRouter {
     }
   }
 
+  // 根据传入的信息创建并返回路由对象
   match (
     raw,
     current,
@@ -2467,18 +2646,23 @@ class VueRouter {
     return this.matcher.match(raw, current, redirectedFrom)
   }
 
+  // 只读属性，获取当前路由对象
   get currentRoute () {
+    // 路由实例上会挂载history、currentRouter属性，可以访问当前路由对象信息，访问方式
+    // this.$router.history.current或this.$router.currentRouter或this.$route
     return this.history && this.history.current
   }
 
+  // 在install.js中调用的初始化函数，接收跟vue实例this作为参数
   init (app /* Vue component instance */) {
+    // 通过install.installed检测有没有使用vue.use()注册路由
     "development" !== 'production' && assert(
       install.installed,
       `not installed. Make sure to call \`Vue.use(VueRouter)\` ` +
       `before creating root instance.`
     );
 
-    this.apps.push(app);
+    this.apps.push(app); // 存储当前vue实例
 
     // set up app destroyed handler
     // https://github.com/vuejs/vue-router/issues/2639
@@ -2493,17 +2677,19 @@ class VueRouter {
 
     // main app previously initialized
     // return as we don't need to set up new history listener
+    // 如果已经初始化，即return
     if (this.app) {
       return
     }
 
     this.app = app;
 
-    const history = this.history;
-
-    if (history instanceof HTML5History) {
+    const history = this.history; // 存储路由模式
+    
+    if (history instanceof HTML5History) { // 当前路由类型是否是HTML5History
+      // 进行路由转换，history.getCurrentLocation()获取当前的/v2/api/?#optionMergeStrategies部分
       history.transitionTo(history.getCurrentLocation());
-    } else if (history instanceof HashHistory) {
+    } else if (history instanceof HashHistory) { // 当前路由类型是否是HashHistory
       const setupHashListener = () => {
         history.setupListeners();
       };
@@ -2514,6 +2700,7 @@ class VueRouter {
       );
     }
 
+    // 监听路由的变化
     history.listen(route => {
       this.apps.forEach((app) => {
         app._route = route;
@@ -2627,6 +2814,7 @@ function createHref (base, fullPath, mode) {
 VueRouter.install = install;
 VueRouter.version = '3.0.7';
 
+// 在浏览器中，并且vue是通过script引入的
 if (inBrowser && window.Vue) {
   window.Vue.use(VueRouter);
 }
