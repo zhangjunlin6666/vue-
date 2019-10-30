@@ -1,0 +1,72 @@
+<!--
+ * @Author: jackson
+ * @Date: 2019-10-23 18:07:02
+ * @LastEditors: jackson
+ * @LastEditTime: 2019-10-29 16:56:31
+ -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <script src="./../../vue/dist/vue.js"></script>
+    <script src="./../../vuex/dist/vuex.js"></script>
+</head>
+<body>
+    <div id='app'>
+    </div>
+    <script>
+        let store = new Vuex.Store({
+                state:{
+                    a: 1
+                },
+                getters:{
+                    getA(state){
+                        return state.a + 2;
+                    }
+                },
+                mutations: {
+                    setA(state, params){
+                        state.a = params;
+                    }
+                },
+                actions: {
+                    asyncSetA({ commit }, params){
+                        commit('setA',params)
+                    }
+                },
+                modules:{
+                    namespaced: true,
+                    b: {
+                        state:{
+                            b: 1
+                        },
+                        getters:{
+                            getB(state){
+                                return state.b + 2;
+                            }
+                        },
+                        mutations: {
+                            setB(state, params){
+                                state.b = params;
+                            }
+                        },
+                        actions: {
+                            asyncSetB({ commit }, params){
+                                commit('setB',params)
+                            }
+                        },
+                    }
+                }
+            })
+        
+        let vm = new Vue({
+            el: '#app',
+            store
+        })
+        console.log(vm);
+    </script>
+</body>
+</html>
